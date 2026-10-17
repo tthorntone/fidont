@@ -1,7 +1,9 @@
 package us.z1x.fidont
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.os.Bundle
 import androidx.core.net.toUri
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import us.z1x.fidont.ctap2.Authenticator
@@ -21,9 +23,29 @@ class App : Application() {
     val hid by lazy { HidKey(this) }
     val preferences by lazy { Preferences(this) }
     private val writer = Executors.newSingleThreadExecutor()
+    @Volatile
+    private var startedActivities = 0
+    val isVisible get() = startedActivities > 0
 
     override fun onCreate() {
         super.onCreate()
+        registerActivityLifecycleCallbacks(
+            object : ActivityLifecycleCallbacks {
+                override fun onActivityStarted(activity: Activity) {
+                    startedActivities++
+                }
+
+                override fun onActivityStopped(activity: Activity) {
+                    startedActivities--
+                }
+
+                override fun onActivityCreated(activity: Activity, state: Bundle?) {}
+                override fun onActivityResumed(activity: Activity) {}
+                override fun onActivityPaused(activity: Activity) {}
+                override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
+                override fun onActivityDestroyed(activity: Activity) {}
+            },
+        )
         credentials.all().addListener { saveBackup() }
     }
 

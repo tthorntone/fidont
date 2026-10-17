@@ -18,6 +18,8 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import us.z1x.fidont.app
 import kotlin.time.Duration.Companion.seconds
@@ -59,6 +61,7 @@ class HidKey(
     private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
+    private val serving = Mutex()
     val status = MutableStateFlow<HidStatus>(HidStatus.Starting)
     val nearby = MutableStateFlow(emptyList<BluetoothDevice>())
     val searching = MutableStateFlow(false)
@@ -90,11 +93,12 @@ class HidKey(
         host?.let { hid?.disconnect(it) }
     }
 
-    // Android only keeps the key registered while the app is in front
-    suspend fun serve() {
+    // Android only keeps the key registered while the process is foreground, which can be
+    // provided by either a visible activity or BluetoothService.
+    suspend fun serve() = serving.withLock {
         if (adapter?.isEnabled != true) {
             status.value = HidStatus.Off
-            return
+            return@withLock
         }
         withContext(Dispatchers.Default.limitedParallelism(1)) {
             val ctap = CtapHid(this, context.app.authenticator) { packet -> host?.let { hid?.sendReport(it, 0, packet) } }

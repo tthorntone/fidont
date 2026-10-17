@@ -16,6 +16,7 @@ private const val BACKUP_FAILED = "backup_failed"
 private const val LIGHT_MODE = "light_mode"
 private const val LIGHT_HUE = "light_hue"
 private const val LIGHT_BRIGHTNESS = "light_brightness"
+private const val BACKGROUND_BLUETOOTH = "background_bluetooth"
 
 enum class ThemeMode { System, Light, Dark }
 
@@ -40,6 +41,7 @@ class Preferences(
     val firmware = MutableStateFlow(store.getString(FIRMWARE, "")!!)
     val backupFile = MutableStateFlow(store.getString(BACKUP_FILE, null))
     val backupFailed = MutableStateFlow(store.getBoolean(BACKUP_FAILED, false))
+    val backgroundBluetooth = MutableStateFlow(store.getBoolean(BACKGROUND_BLUETOOTH, false))
     val light =
         MutableStateFlow(
             Light(
@@ -83,6 +85,11 @@ class Preferences(
     fun setBackupFailed(value: Boolean) {
         store.edit { putBoolean(BACKUP_FAILED, value) }
         backupFailed.value = value
+    }
+
+    fun setBackgroundBluetooth(value: Boolean) {
+        store.edit { putBoolean(BACKGROUND_BLUETOOTH, value) }
+        backgroundBluetooth.value = value
     }
 
     fun setLight(value: Light) {

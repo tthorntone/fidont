@@ -10,10 +10,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import us.z1x.fidont.app
+import us.z1x.fidont.transport.hid.BluetoothService
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (app.preferences.backgroundBluetooth.value && !BluetoothService.start(this)) {
+            app.preferences.setBackgroundBluetooth(false)
+        }
         setScreen {
             val onboarded by app.preferences.onboarded.collectAsState()
             Crossfade(

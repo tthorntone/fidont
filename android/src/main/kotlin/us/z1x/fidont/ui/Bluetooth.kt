@@ -93,6 +93,7 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     val key = context.app.hid
+    val background by context.app.preferences.backgroundBluetooth.collectAsState()
     val status by key.status.collectAsState()
     val nearby by key.nearby.collectAsState()
     val searching by key.searching.collectAsState()
@@ -105,8 +106,8 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
         }
     var searched by remember { mutableStateOf(false) }
 
-    if (allowed) {
-        LaunchedEffect(Unit) {
+    if (allowed && !background) {
+        LaunchedEffect(background) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { key.serve() }
         }
     }

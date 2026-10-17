@@ -2,6 +2,8 @@ package us.z1x.fidont.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +52,7 @@ import us.z1x.fidont.hybrid.CUSTOM_RELAYS
 import us.z1x.fidont.hybrid.FIDONT_RELAY
 import us.z1x.fidont.hybrid.GOOGLE_RELAY
 import us.z1x.fidont.hybrid.relayDomain
+import us.z1x.fidont.transport.hid.BluetoothService
 
 const val AUTHOR = "https://z1x.us"
 private const val REPOSITORY = "https://github.com/Z1xus/fidont"
@@ -76,10 +79,18 @@ fun Settings(
     val relay by preferences.relay.collectAsState()
     val firmware by preferences.firmware.collectAsState()
     val light by preferences.light.collectAsState()
+    val backgroundBluetooth by preferences.backgroundBluetooth.collectAsState()
     val links by context.app.dongle.links
         .collectAsState()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     val dongle = links.any { it.computer == null }
+    val backgroundPermissions =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            val allowed =
+                context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (allowed) BluetoothService.setEnabled(context, true)
+        }
     // the home screen stops its link when this screen opens, and the light needs one
     if (dongle && context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
         val lifecycle = LocalLifecycleOwner.current
@@ -92,6 +103,7 @@ fun Settings(
         relay = relay,
         firmware = firmware,
         light = light.takeIf { dongle },
+        backgroundBluetooth = backgroundBluetooth,
         version = BuildConfig.VERSION_NAME,
         commit = BuildConfig.COMMIT,
         strongBox = strongBox,
@@ -103,6 +115,23 @@ fun Settings(
         onRelay = preferences::setRelay,
         onFirmware = preferences::setFirmware,
         onLight = preferences::setLight,
+        onBackgroundBluetooth = { enabled ->
+            if (!enabled) {
+                BluetoothService.setEnabled(context, false)
+            } else {
+                val permissions =
+                    arrayOf(
+                        Manifest.permission.BLUETOOTH_CONNECT,
+                        Manifest.permission.BLUETOOTH_SCAN,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    )
+                if (permissions.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) {
+                    BluetoothService.setEnabled(context, true)
+                } else {
+                    backgroundPermissions.launch(permissions)
+                }
+            }
+        },
         onBack = onBack,
         onPrivacy = onPrivacy,
         onLicenses = onLicenses,
@@ -117,6 +146,7 @@ fun SettingsScreen(
     relay: Int,
     firmware: String,
     light: Light?,
+    backgroundBluetooth: Boolean,
     version: String,
     commit: String,
     strongBox: Boolean,
@@ -128,6 +158,7 @@ fun SettingsScreen(
     onRelay: (Int) -> Unit,
     onFirmware: (String) -> Unit,
     onLight: (Light) -> Unit,
+    onBackgroundBluetooth: (Boolean) -> Unit,
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
     onLicenses: () -> Unit,
@@ -191,6 +222,17 @@ fun SettingsScreen(
         }
         item { SectionHeader(R.string.relay) }
         item { Relay(relay, onRelay) }
+        item { SectionHeader(R.string.bluetooth) }
+        item {
+            Entry(
+                0,
+                1,
+                stringResource(R.string.background_bluetooth),
+                supporting = stringResource(R.string.background_bluetooth_body),
+                trailing = { Switch(backgroundBluetooth, onCheckedChange = null) },
+                onClick = { onBackgroundBluetooth(!backgroundBluetooth) },
+            )
+        }
         item { SectionHeader(R.string.firmware) }
         item { Firmware(firmware, onFirmware) }
         item { SectionHeader(R.string.appearance) }
