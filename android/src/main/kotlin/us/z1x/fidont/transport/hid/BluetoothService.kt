@@ -18,16 +18,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import us.z1x.fidont.BackgroundBluetoothMode
 import us.z1x.fidont.R
 import us.z1x.fidont.app
 import us.z1x.fidont.ui.MainActivity
+import kotlin.time.Duration.Companion.seconds
 
 private const val CHANNEL = "background_bluetooth"
 private const val NOTIFICATION = 2
 private const val STOP = "us.z1x.fidont.STOP_BACKGROUND_BLUETOOTH"
+private const val HANDOFF = "us.z1x.fidont.START_COMPANION_HANDOFF"
+private val HANDOFF_TIMEOUT = 30.seconds
 
-/** Keeps the Bluetooth HID registration foreground while the user has opted in. */
+/** Keeps the Bluetooth HID registration foreground while Always mode is selected. */
 class BluetoothService : Service() {
     private val scope = CoroutineScope(Dispatchers.Default)
     private var server: Job? = null
@@ -50,14 +55,21 @@ class BluetoothService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        if (intent?.action == STOP || !app.preferences.backgroundBluetooth.value) {
-            app.preferences.setBackgroundBluetooth(false)
+        val handoff = intent?.action == HANDOFF && app.preferences.backgroundBluetooth.value == BackgroundBluetoothMode.Companion
+        if (intent?.action == STOP || app.preferences.backgroundBluetooth.value != BackgroundBluetoothMode.Always && !handoff) {
+            if (intent?.action == STOP) app.preferences.setBackgroundBluetooth(BackgroundBluetoothMode.Off)
             stopSelf()
             return START_NOT_STICKY
         }
         startForeground(NOTIFICATION, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         refresh()
-        return START_STICKY
+        if (handoff) {
+            scope.launch {
+                delay(HANDOFF_TIMEOUT)
+                if (app.preferences.backgroundBluetooth.value == BackgroundBluetoothMode.Companion) stopSelf()
+            }
+        }
+        return if (handoff) START_NOT_STICKY else START_STICKY
     }
 
     private fun refresh() {
@@ -106,19 +118,30 @@ class BluetoothService : Service() {
     companion object {
         fun start(context: Context): Boolean {
             val allowed =
-                context.app.preferences.backgroundBluetooth.value &&
+                context.app.preferences.backgroundBluetooth.value == BackgroundBluetoothMode.Always &&
                     context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
                     context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             if (allowed) context.startForegroundService(Intent(context, BluetoothService::class.java))
             return allowed
         }
 
-        fun setEnabled(
-            context: Context,
-            enabled: Boolean,
-        ) {
-            context.app.preferences.setBackgroundBluetooth(enabled)
-            if (enabled) start(context) else context.stopService(Intent(context, BluetoothService::class.java))
+        fun enable(context: Context) {
+            context.app.bluetoothCompanion.disable()
+            context.app.preferences.setBackgroundBluetooth(BackgroundBluetoothMode.Always)
+            start(context)
+        }
+
+        fun stop(context: Context) {
+            context.stopService(Intent(context, BluetoothService::class.java))
+        }
+
+        fun handoff(context: Context) {
+            context.startForegroundService(Intent(context, BluetoothService::class.java).setAction(HANDOFF))
+        }
+
+        fun disable(context: Context) {
+            context.app.preferences.setBackgroundBluetooth(BackgroundBluetoothMode.Off)
+            stop(context)
         }
     }
 }

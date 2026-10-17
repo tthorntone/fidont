@@ -10,6 +10,7 @@ import us.z1x.fidont.ctap2.Authenticator
 import us.z1x.fidont.keystore.AndroidKeyStore
 import us.z1x.fidont.store.Database
 import us.z1x.fidont.transport.dongle.Dongle
+import us.z1x.fidont.transport.hid.BluetoothCompanion
 import us.z1x.fidont.transport.hid.HidKey
 import us.z1x.fidont.ui.PromptActivity
 import java.io.IOException
@@ -21,6 +22,7 @@ class App : Application() {
     val authenticator by lazy { Authenticator(keys, credentials) { PromptActivity.choose(this, it) } }
     val dongle by lazy { Dongle(this) }
     val hid by lazy { HidKey(this) }
+    val bluetoothCompanion by lazy { BluetoothCompanion(this) }
     val preferences by lazy { Preferences(this) }
     private val writer = Executors.newSingleThreadExecutor()
     @Volatile
